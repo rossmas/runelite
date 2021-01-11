@@ -45,6 +45,8 @@ import net.runelite.client.config.RuneLiteConfig;
 import net.runelite.client.ui.ClientUI;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.ui.overlay.infobox.InfoBoxManager;
+import net.runelite.client.util.ImageCapture;
 import static org.junit.Assert.assertEquals;
 import org.junit.Before;
 import org.junit.Test;
@@ -104,6 +106,14 @@ public class ScreenshotPluginTest
 	@Mock
 	@Bind
 	private OverlayManager overlayManager;
+
+	@Mock
+	@Bind
+	private InfoBoxManager infoBoxManager;
+
+	@Mock
+	@Bind
+	private ImageCapture imageCapture;
 
 	@Before
 	public void before()
