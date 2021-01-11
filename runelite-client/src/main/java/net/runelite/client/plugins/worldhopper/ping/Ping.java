@@ -41,7 +41,7 @@ public class Ping
 	private static final String RUNELITE_PING = "RuneLitePing";
 
 	private static final int TIMEOUT = 2000;
-	private static final int PORT = 43594;
+	private static final int PORT = 44444;
 
 	public static int ping(World world)
 	{
