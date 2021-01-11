@@ -54,6 +54,11 @@ public class ChatController
 		.maximumSize(128L)
 		.build();
 
+	private final Cache<BossRankKey, Integer> bossRankCache = CacheBuilder.newBuilder()
+		.expireAfterWrite(2, TimeUnit.MINUTES)
+		.maximumSize(128L)
+		.build();
+
 	@Autowired
 	private ChatService chatService;
 
@@ -87,6 +92,38 @@ public class ChatController
 			throw new NotFoundException();
 		}
 		return kc;
+	}
+
+	@PostMapping("/rank")
+	public void submitRank(@RequestParam String name, @RequestParam String boss, @RequestParam int rank)
+	{
+		if (rank <= 0)
+		{
+			return;
+		}
+
+		chatService.setKc(name, boss, rank);
+		bossRankCache.put(new BossRankKey(name, boss), rank);
+	}
+
+	@GetMapping("/rank")
+	public int getRank(@RequestParam String name, @RequestParam String boss)
+	{
+		Integer rank = bossRankCache.getIfPresent(new BossRankKey(name, boss));
+		if (rank == null)
+		{
+			rank = chatService.getBossRank(name, boss);
+			if (rank != null)
+			{
+				bossRankCache.put(new BossRankKey(name, boss), rank);
+			}
+		}
+
+		if (rank == null)
+		{
+			throw new NotFoundException();
+		}
+		return rank;
 	}
 
 	@PostMapping("/qp")

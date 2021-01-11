@@ -86,6 +86,50 @@ public class ChatClient
 		}
 	}
 
+	public boolean submitRank(String username, String boss, int rank) throws IOException
+	{
+		HttpUrl url = RuneLiteAPI.getApiBase().newBuilder()
+			.addPathSegment("chat")
+			.addPathSegment("rank")
+			.addQueryParameter("name", username)
+			.addQueryParameter("boss", boss)
+			.addQueryParameter("rank", Integer.toString(rank))
+			.build();
+
+		Request request = new Request.Builder()
+			.post(RequestBody.create(null, new byte[0]))
+			.url(url)
+			.build();
+
+		try (Response response = client.newCall(request).execute())
+		{
+			return response.isSuccessful();
+		}
+	}
+
+	public int getRank(String username, String boss) throws IOException
+	{
+		HttpUrl url = RuneLiteAPI.getApiBase().newBuilder()
+			.addPathSegment("chat")
+			.addPathSegment("rank")
+			.addQueryParameter("name", username)
+			.addQueryParameter("boss", boss)
+			.build();
+
+		Request request = new Request.Builder()
+			.url(url)
+			.build();
+
+		try (Response response = client.newCall(request).execute())
+		{
+			if (!response.isSuccessful())
+			{
+				throw new IOException("Unable to look up boss rank!");
+			}
+			return Integer.parseInt(response.body().string());
+		}
+	}
+
 	public boolean submitQp(String username, int qp) throws IOException
 	{
 		HttpUrl url = RuneLiteAPI.getApiBase().newBuilder()

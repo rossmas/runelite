@@ -80,6 +80,17 @@ public interface ChatCommandsConfig extends Config
 
 	@ConfigItem(
 		position = 4,
+		keyName = "bossrank",
+		name = "Boss Rank Command",
+		description = "Configures whether the Boss Rank command is enabled<br> !rank [boss]"
+	)
+	default boolean bossrank()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		position = 5,
 		keyName = "qp",
 		name = "QP Command",
 		description = "Configures whether the quest point command is enabled<br> !qp"
@@ -90,7 +101,7 @@ public interface ChatCommandsConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 5,
+		position = 6,
 		keyName = "pb",
 		name = "PB Command",
 		description = "Configures whether the personal best command is enabled<br> !pb"
@@ -101,7 +112,7 @@ public interface ChatCommandsConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 6,
+		position = 7,
 		keyName = "gc",
 		name = "GC Command",
 		description = "Configures whether the Barbarian Assault High gamble count command is enabled<br> !gc"
@@ -112,7 +123,7 @@ public interface ChatCommandsConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 7,
+		position = 8,
 		keyName = "duels",
 		name = "Duels Command",
 		description = "Configures whether the duel arena command is enabled<br> !duels"
@@ -123,7 +134,7 @@ public interface ChatCommandsConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 8,
+		position = 9,
 		keyName = "bh",
 		name = "BH Command",
 		description = "Configures whether the Bounty Hunter - Hunter command is enabled<br> !bh"
@@ -134,7 +145,7 @@ public interface ChatCommandsConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 9,
+		position = 10,
 		keyName = "bhRogue",
 		name = "BH Rogue Command",
 		description = "Configures whether the Bounty Hunter - Rogue command is enabled<br> !bhrogue"
@@ -145,7 +156,7 @@ public interface ChatCommandsConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 10,
+		position = 11,
 		keyName = "lms",
 		name = "LMS Command",
 		description = "Configures whether the Last Man Standing command is enabled<br> !lms"
@@ -156,7 +167,7 @@ public interface ChatCommandsConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 11,
+		position = 12,
 		keyName = "clearSingleWord",
 		name = "Clear Single Word",
 		description = "Enable hot key to clear single word at a time"
@@ -167,7 +178,7 @@ public interface ChatCommandsConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 12,
+		position = 13,
 		keyName = "clearEntireChatBox",
 		name = "Clear Chat Box",
 		description = "Enable hotkey to clear entire chat box"

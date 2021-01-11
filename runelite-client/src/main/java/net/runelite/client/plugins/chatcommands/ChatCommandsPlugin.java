@@ -92,6 +92,7 @@ import org.apache.commons.text.WordUtils;
 public class ChatCommandsPlugin extends Plugin
 {
 	private static final Pattern KILLCOUNT_PATTERN = Pattern.compile("Your (.+) (?:kill|harvest|lap|completion) count is: <col=ff0000>(\\d+)</col>");
+	private static final Pattern BOSS_RANK_PATTERN = Pattern.compile("Your (.+) rank is: <col=ff0000>(\\d+)</col>");
 	private static final Pattern RAIDS_PATTERN = Pattern.compile("Your completed (.+) count is: <col=ff0000>(\\d+)</col>");
 	private static final String COX_TEAM_SIZES = "(?:\\d+(?:\\+|-\\d+)? players|Solo)";
 	private static final Pattern RAIDS_PB_PATTERN = Pattern.compile("<col=ef20ff>Congratulations - your raid is complete!</col><br>Team size: <col=ff0000>" + COX_TEAM_SIZES + "</col> Duration:</col> <col=ff0000>(?<pb>[0-9:]+)</col> \\(new personal best\\)</col>");
@@ -121,6 +122,7 @@ public class ChatCommandsPlugin extends Plugin
 	private static final String CLUES_COMMAND_STRING = "!clues";
 	private static final String LAST_MAN_STANDING_COMMAND = "!lms";
 	private static final String KILLCOUNT_COMMAND_STRING = "!kc";
+	private static final String BOSS_RANK_COMMAND_STRING = "!rank";
 	private static final String CMB_COMMAND_STRING = "!cmb";
 	private static final String QP_COMMAND_STRING = "!qp";
 	private static final String PB_COMMAND = "!pb";
@@ -185,6 +187,7 @@ public class ChatCommandsPlugin extends Plugin
 		chatCommandManager.registerCommandAsync(CLUES_COMMAND_STRING, this::clueLookup);
 		chatCommandManager.registerCommandAsync(LAST_MAN_STANDING_COMMAND, this::lastManStandingLookup);
 		chatCommandManager.registerCommandAsync(KILLCOUNT_COMMAND_STRING, this::killCountLookup, this::killCountSubmit);
+		chatCommandManager.registerCommandAsync(BOSS_RANK_COMMAND_STRING, this::bossRankLookup, this::bossRankSubmit);
 		chatCommandManager.registerCommandAsync(QP_COMMAND_STRING, this::questPointsLookup, this::questPointsSubmit);
 		chatCommandManager.registerCommandAsync(PB_COMMAND, this::personalBestLookup, this::personalBestSubmit);
 		chatCommandManager.registerCommandAsync(GC_COMMAND_STRING, this::gambleCountLookup, this::gambleCountSubmit);
@@ -204,6 +207,7 @@ public class ChatCommandsPlugin extends Plugin
 		chatCommandManager.unregisterCommand(LEVEL_COMMAND_STRING);
 		chatCommandManager.unregisterCommand(CLUES_COMMAND_STRING);
 		chatCommandManager.unregisterCommand(KILLCOUNT_COMMAND_STRING);
+		chatCommandManager.unregisterCommand(BOSS_RANK_COMMAND_STRING);
 		chatCommandManager.unregisterCommand(QP_COMMAND_STRING);
 		chatCommandManager.unregisterCommand(PB_COMMAND);
 		chatCommandManager.unregisterCommand(GC_COMMAND_STRING);
@@ -233,6 +237,19 @@ public class ChatCommandsPlugin extends Plugin
 		Integer killCount = configManager.getConfiguration("killcount." + client.getUsername().toLowerCase(),
 			boss.toLowerCase(), int.class);
 		return killCount == null ? 0 : killCount;
+	}
+
+	private void setRank(String boss, int rank)
+	{
+		configManager.setConfiguration("bossrank." + client.getUsername().toLowerCase(),
+			boss.toLowerCase(), rank);
+	}
+
+	private int getRank(String boss)
+	{
+		Integer bossRank = configManager.getConfiguration("bossrank." + client.getUsername().toLowerCase(),
+			boss.toLowerCase(), int.class);
+		return bossRank == null ? 0 : bossRank;
 	}
 
 	private void setPb(String boss, int seconds)
@@ -279,6 +296,15 @@ public class ChatCommandsPlugin extends Plugin
 				lastBossKill = boss;
 			}
 			return;
+		}
+
+		matcher = BOSS_RANK_PATTERN.matcher(message);
+		if (matcher.find())
+		{
+			String boss = matcher.group(1);
+			int rank = Integer.parseInt(matcher.group(2));
+
+			setRank(boss, rank);
 		}
 
 		matcher = WINTERTODT_PATTERN.matcher(message);
@@ -660,6 +686,92 @@ public class ChatCommandsPlugin extends Plugin
 			.append(" kill count: ")
 			.append(ChatColorType.HIGHLIGHT)
 			.append(Integer.toString(kc))
+			.build();
+
+		log.debug("Setting response {}", response);
+		final MessageNode messageNode = chatMessage.getMessageNode();
+		messageNode.setRuneLiteFormatMessage(response);
+		chatMessageManager.update(messageNode);
+		client.refreshChat();
+	}
+
+	private boolean bossRankSubmit(ChatInput chatInput, String value)
+	{
+		int idx = value.indexOf(' ');
+		final String boss = longBossName(value.substring(idx + 1));
+
+		final int rank = getRank(boss);
+		if (rank <= 0)
+		{
+			return false;
+		}
+
+		final String playerName = client.getLocalPlayer().getName();
+
+		executor.execute(() ->
+		{
+			try
+			{
+				chatClient.submitRank(playerName, boss, rank);
+			}
+			catch (Exception ex)
+			{
+				log.warn("unable to submit boss rank", ex);
+			}
+			finally
+			{
+				chatInput.resume();
+			}
+		});
+
+		return true;
+	}
+
+	private void bossRankLookup(ChatMessage chatMessage, String message)
+	{
+		if (!config.bossrank())
+		{
+			return;
+		}
+
+		if (message.length() <= BOSS_RANK_COMMAND_STRING.length())
+		{
+			return;
+		}
+
+		ChatMessageType type = chatMessage.getType();
+		String search = message.substring(BOSS_RANK_COMMAND_STRING.length() + 1);
+
+		final String player;
+		if (type.equals(ChatMessageType.PRIVATECHATOUT))
+		{
+			player = client.getLocalPlayer().getName();
+		}
+		else
+		{
+			player = Text.sanitize(chatMessage.getName());
+		}
+
+		search = longBossName(search);
+
+		final int rank;
+		try
+		{
+			rank = chatClient.getRank(player, search);
+		}
+		catch (IOException ex)
+		{
+			log.debug("unable to lookup boss rank", ex);
+			return;
+		}
+
+		String response = new ChatMessageBuilder()
+			.append(ChatColorType.HIGHLIGHT)
+			.append(search)
+			.append(ChatColorType.NORMAL)
+			.append(" boss rank: ")
+			.append(ChatColorType.HIGHLIGHT)
+			.append(Integer.toString(rank))
 			.build();
 
 		log.debug("Setting response {}", response);

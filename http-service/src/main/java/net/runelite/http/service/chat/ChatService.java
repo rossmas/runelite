@@ -69,6 +69,24 @@ public class ChatService
 		}
 	}
 
+	public Integer getBossRank(String name, String boss)
+	{
+		String value;
+		try (Jedis jedis = jedisPool.getResource())
+		{
+			value = jedis.get("rank." + name + "." + boss);
+		}
+		return value == null ? null : Integer.parseInt(value);
+	}
+
+	public void setBossRank(String name, String boss, Integer rank)
+	{
+		try (Jedis jedis = jedisPool.getResource())
+		{
+			jedis.setex("rank." + name + "." + boss, (int) EXPIRE.getSeconds(), Integer.toString(rank));
+		}
+	}
+
 	public Integer getQp(String name)
 	{
 		String value;
