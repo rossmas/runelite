@@ -128,6 +128,7 @@ public class ChatCommandsPlugin extends Plugin
 	private static final String PB_COMMAND = "!pb";
 	private static final String GC_COMMAND_STRING = "!gc";
 	private static final String DUEL_ARENA_COMMAND = "!duels";
+	private static final String LEAGUE_POINTS_COMMAND = "!lp";
 
 	@VisibleForTesting
 	static final int ADV_LOG_EXPLOITS_TEXT_INDEX = 1;
@@ -138,6 +139,7 @@ public class ChatCommandsPlugin extends Plugin
 	private String pohOwner;
 	private HiscoreEndpoint hiscoreEndpoint; // hiscore endpoint for current player
 	private String lastBossKill;
+	private int lastBossTime = -1;
 	private int lastPb = -1;
 
 	@Inject
@@ -186,6 +188,7 @@ public class ChatCommandsPlugin extends Plugin
 		chatCommandManager.registerCommandAsync(BOUNTY_HUNTER_ROGUE_COMMAND, this::bountyHunterRogueLookup);
 		chatCommandManager.registerCommandAsync(CLUES_COMMAND_STRING, this::clueLookup);
 		chatCommandManager.registerCommandAsync(LAST_MAN_STANDING_COMMAND, this::lastManStandingLookup);
+		chatCommandManager.registerCommandAsync(LEAGUE_POINTS_COMMAND, this::leaguePointsLookup);
 		chatCommandManager.registerCommandAsync(KILLCOUNT_COMMAND_STRING, this::killCountLookup, this::killCountSubmit);
 		chatCommandManager.registerCommandAsync(BOSS_RANK_COMMAND_STRING, this::bossRankLookup, this::bossRankSubmit);
 		chatCommandManager.registerCommandAsync(QP_COMMAND_STRING, this::questPointsLookup, this::questPointsSubmit);
@@ -198,6 +201,7 @@ public class ChatCommandsPlugin extends Plugin
 	public void shutDown()
 	{
 		lastBossKill = null;
+		lastBossTime = -1;
 
 		keyManager.unregisterKeyListener(chatKeyboardListener);
 
@@ -205,7 +209,11 @@ public class ChatCommandsPlugin extends Plugin
 		chatCommandManager.unregisterCommand(CMB_COMMAND_STRING);
 		chatCommandManager.unregisterCommand(PRICE_COMMAND_STRING);
 		chatCommandManager.unregisterCommand(LEVEL_COMMAND_STRING);
+		chatCommandManager.unregisterCommand(BOUNTY_HUNTER_HUNTER_COMMAND);
+		chatCommandManager.unregisterCommand(BOUNTY_HUNTER_ROGUE_COMMAND);
 		chatCommandManager.unregisterCommand(CLUES_COMMAND_STRING);
+		chatCommandManager.unregisterCommand(LAST_MAN_STANDING_COMMAND);
+		chatCommandManager.unregisterCommand(LEAGUE_POINTS_COMMAND);
 		chatCommandManager.unregisterCommand(KILLCOUNT_COMMAND_STRING);
 		chatCommandManager.unregisterCommand(BOSS_RANK_COMMAND_STRING);
 		chatCommandManager.unregisterCommand(QP_COMMAND_STRING);
@@ -228,14 +236,12 @@ public class ChatCommandsPlugin extends Plugin
 
 	private void setKc(String boss, int killcount)
 	{
-		configManager.setConfiguration("killcount." + client.getUsername().toLowerCase(),
-			boss.toLowerCase(), killcount);
+		configManager.setRSProfileConfiguration("killcount", boss.toLowerCase(), killcount);
 	}
 
 	private int getKc(String boss)
 	{
-		Integer killCount = configManager.getConfiguration("killcount." + client.getUsername().toLowerCase(),
-			boss.toLowerCase(), int.class);
+		Integer killCount = configManager.getRSProfileConfiguration("killcount", boss.toLowerCase(), int.class);
 		return killCount == null ? 0 : killCount;
 	}
 
@@ -254,14 +260,12 @@ public class ChatCommandsPlugin extends Plugin
 
 	private void setPb(String boss, int seconds)
 	{
-		configManager.setConfiguration("personalbest." + client.getUsername().toLowerCase(),
-			boss.toLowerCase(), seconds);
+		configManager.setRSProfileConfiguration("personalbest", boss.toLowerCase(), seconds);
 	}
 
 	private int getPb(String boss)
 	{
-		Integer personalBest = configManager.getConfiguration("personalbest." + client.getUsername().toLowerCase(),
-			boss.toLowerCase(), int.class);
+		Integer personalBest = configManager.getRSProfileConfiguration("personalbest", boss.toLowerCase(), int.class);
 		return personalBest == null ? 0 : personalBest;
 	}
 
@@ -294,6 +298,7 @@ public class ChatCommandsPlugin extends Plugin
 			else
 			{
 				lastBossKill = boss;
+				lastBossTime = client.getTickCount();
 			}
 			return;
 		}
@@ -324,16 +329,11 @@ public class ChatCommandsPlugin extends Plugin
 			setKc(boss, kc);
 			if (lastPb > -1)
 			{
-				// lastPb contains the last raid duration and not the personal best, because the raid
-				// complete message does not include the pb. We have to check if it is a new pb:
-				int currentPb = getPb(boss);
-				if (currentPb <= 0 || lastPb < currentPb)
-				{
-					setPb(boss, lastPb);
-				}
+				setPb(boss, lastPb);
 				lastPb = -1;
 			}
 			lastBossKill = boss;
+			lastBossTime = client.getTickCount();
 			return;
 		}
 
@@ -452,7 +452,11 @@ public class ChatCommandsPlugin extends Plugin
 			setKc("Hallowed Sepulchre", kc);
 		}
 
-		lastBossKill = null;
+		if (lastBossKill != null && lastBossTime != client.getTickCount())
+		{
+			lastBossKill = null;
+			lastBossTime = -1;
+		}
 	}
 
 	private static int timeStringToSeconds(String timeString)
@@ -1161,7 +1165,8 @@ public class ChatCommandsPlugin extends Plugin
 	 * @param chatMessage The chat message containing the command.
 	 * @param message    The chat message
 	 */
-	private void playerSkillLookup(ChatMessage chatMessage, String message)
+	@VisibleForTesting
+	void playerSkillLookup(ChatMessage chatMessage, String message)
 	{
 		if (!config.lvl())
 		{
@@ -1326,6 +1331,16 @@ public class ChatCommandsPlugin extends Plugin
 		}
 	}
 
+	private void leaguePointsLookup(ChatMessage chatMessage, String message)
+	{
+		if (!config.lp())
+		{
+			return;
+		}
+
+		minigameLookup(chatMessage, HiscoreSkill.LEAGUE_POINTS);
+	}
+
 	private void bountyHunterHunterLookup(ChatMessage chatMessage, String message)
 	{
 		if (!config.bh())
@@ -1362,7 +1377,13 @@ public class ChatCommandsPlugin extends Plugin
 		{
 			final Skill hiscoreSkill;
 			final HiscoreLookup lookup = getCorrectLookupFor(chatMessage);
-			final HiscoreResult result = hiscoreClient.lookup(lookup.getName(), lookup.getEndpoint());
+
+			// League points only exist on the league hiscores
+			final HiscoreEndpoint endPoint = minigame == HiscoreSkill.LEAGUE_POINTS ?
+				HiscoreEndpoint.LEAGUE :
+				lookup.getEndpoint();
+
+			final HiscoreResult result = hiscoreClient.lookup(lookup.getName(), endPoint);
 
 			if (result == null)
 			{
@@ -1381,6 +1402,9 @@ public class ChatCommandsPlugin extends Plugin
 				case LAST_MAN_STANDING:
 					hiscoreSkill = result.getLastManStanding();
 					break;
+				case LEAGUE_POINTS:
+					hiscoreSkill = result.getLeaguePoints();
+					break;
 				default:
 					log.warn("error looking up {} score: not implemented", minigame.getName().toLowerCase());
 					return;
@@ -1397,7 +1421,7 @@ public class ChatCommandsPlugin extends Plugin
 				.append(minigame.getName())
 				.append(" Score: ")
 				.append(ChatColorType.HIGHLIGHT)
-				.append(Integer.toString(score));
+				.append(String.format("%,d", score));
 
 			int rank = hiscoreSkill.getRank();
 			if (rank != -1)
@@ -1543,7 +1567,7 @@ public class ChatCommandsPlugin extends Plugin
 			}
 		}
 
-		// Get ironman status from their icon in chat
+		// Get ironman status from their icon in chat, this handles leagues too
 		HiscoreEndpoint endpoint = getHiscoreEndpointByName(chatMessage.getName());
 		return new HiscoreLookup(player, endpoint);
 	}
@@ -1603,19 +1627,23 @@ public class ChatCommandsPlugin extends Plugin
 	{
 		if (name.contains(IconID.IRONMAN.toString()))
 		{
-			return toEndPoint(AccountType.IRONMAN);
+			return HiscoreEndpoint.IRONMAN;
 		}
 		else if (name.contains(IconID.ULTIMATE_IRONMAN.toString()))
 		{
-			return toEndPoint(AccountType.ULTIMATE_IRONMAN);
+			return HiscoreEndpoint.ULTIMATE_IRONMAN;
 		}
 		else if (name.contains(IconID.HARDCORE_IRONMAN.toString()))
 		{
-			return toEndPoint(AccountType.HARDCORE_IRONMAN);
+			return HiscoreEndpoint.HARDCORE_IRONMAN;
+		}
+		else if (name.contains(IconID.LEAGUE.toString()))
+		{
+			return HiscoreEndpoint.LEAGUE;
 		}
 		else
 		{
-			return toEndPoint(AccountType.NORMAL);
+			return HiscoreEndpoint.NORMAL;
 		}
 	}
 
@@ -1816,6 +1844,112 @@ public class ChatCommandsPlugin extends Plugin
 			case "aa":
 			case "ape atoll":
 				return "Ape Atoll Agility";
+
+			// Draynor Village Rooftop Course
+			case "draynor":
+			case "draynor agility":
+				return "Draynor Village Rooftop";
+
+			// Al-Kharid Rooftop Course
+			case "al kharid":
+			case "al kharid agility":
+			case "al-kharid":
+			case "al-kharid agility":
+			case "alkharid":
+			case "alkharid agility":
+				return "Al-Kharid Rooftop";
+
+			// Varrock Rooftop Course
+			case "varrock":
+			case "varrock agility":
+				return "Varrock Rooftop";
+
+			// Canifis Rooftop Course
+			case "canifis":
+			case "canifis agility":
+				return "Canifis Rooftop";
+
+			// Falador Rooftop Course
+			case "fally":
+			case "fally agility":
+			case "falador":
+			case "falador agility":
+				return "Falador Rooftop";
+
+			// Seers' Village Rooftop Course
+			case "seers":
+			case "seers agility":
+			case "seers village":
+			case "seers village agility":
+			case "seers'":
+			case "seers' agility":
+			case "seers' village":
+			case "seers' village agility":
+			case "seer's":
+			case "seer's agility":
+			case "seer's village":
+			case "seer's village agility":
+				return "Seers' Village Rooftop";
+
+			// Pollnivneach Rooftop Course
+			case "pollnivneach":
+			case "pollnivneach agility":
+				return "Pollnivneach Rooftop";
+
+			// Rellekka Rooftop Course
+			case "rellekka":
+			case "rellekka agility":
+				return "Rellekka Rooftop";
+
+			// Ardougne Rooftop Course
+			case "ardy":
+			case "ardy agility":
+			case "ardy rooftop":
+			case "ardougne":
+			case "ardougne agility":
+				return "Ardougne Rooftop";
+
+			// Agility Pyramid
+			case "ap":
+			case "pyramid":
+				return "Agility Pyramid";
+
+			// Barbarian Outpost
+			case "barb":
+			case "barb outpost":
+				return "Barbarian Outpost";
+
+			// Brimhaven Agility Arena
+			case "brimhaven":
+			case "brimhaven agility":
+				return "Agility Arena";
+
+			// Dorgesh-Kaan Agility Course
+			case "dorg":
+			case "dorgesh kaan":
+			case "dorgesh-kaan":
+				return "Dorgesh-Kaan Agility";
+
+			// Gnome Stronghold Agility Course
+			case "gnome stronghold":
+				return "Gnome Stronghold Agility";
+
+			// Penguin Agility
+			case "penguin":
+				return "Penguin Agility";
+
+			// Werewolf Agility
+			case "werewolf":
+				return "Werewolf Agility";
+
+			// Skullball
+			case "skullball":
+				return "Werewolf Skullball";
+
+			// Wilderness Agility Course
+			case "wildy":
+			case "wildy agility":
+				return "Wilderness Agility";
 
 			default:
 				return WordUtils.capitalize(boss);

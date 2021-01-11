@@ -334,7 +334,8 @@ public interface RuneLiteConfig extends Config
 		name = "Display infoboxes vertically",
 		description = "Toggles the infoboxes to display vertically",
 		position = 40,
-		section = overlaySettings
+		section = overlaySettings,
+		hidden = true
 	)
 	default boolean infoBoxVertical()
 	{
@@ -355,13 +356,25 @@ public interface RuneLiteConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "overlayBackgroundColor",
-		name = "Overlay Color",
-		description = "Configures the background color of infoboxes and overlays",
+		keyName = "infoBoxTextOutline",
+		name = "Outline infobox text",
+		description = "Draw a full outline instead of a simple shadow for infobox text",
 		position = 43,
 		section = overlaySettings
 	)
+	default boolean infoBoxTextOutline()
+	{
+		return false;
+	}
+
 	@Alpha
+	@ConfigItem(
+		keyName = "overlayBackgroundColor",
+		name = "Overlay Color",
+		description = "Configures the background color of infoboxes and overlays",
+		position = 44,
+		section = overlaySettings
+	)
 	default Color overlayBackgroundColor()
 	{
 		return ComponentConstants.STANDARD_BACKGROUND_COLOR;
